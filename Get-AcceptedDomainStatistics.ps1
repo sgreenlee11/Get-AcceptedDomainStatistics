@@ -17,12 +17,6 @@
    Generates report based on proxy addresses instead of primary addresses only. An object with multiple proxy addresses in a single domain will increment the count for that 
    domain for each address 
  
-.Parameter OutCSV 
-   Generatees a CSV report in the same directory the function is run from. The parameter needs to be given a CSV file name. 
- 
-.Parameter OutGrid 
-   Generates a PowerShell grid report of accepted domain statistics. 
- 
 .Parameter MBXOnly 
    Generates a report for mailbox recipients only. 
  
@@ -53,97 +47,58 @@
    Get-AcceptedDomainStatistics -IncludeProxy -OutCSV AcceptedDomains.csv 
  
 #> 
-function Get-AcceptedDomainStatistics 
-{ 
+function Get-AcceptedDomainStatistics { 
     [CmdletBinding()] 
     [OutputType([int])] 
     Param 
     ( 
-        [Parameter(Mandatory=$true,  
-        ValueFromPipeline=$true, 
-        ValueFromPipelineByPropertyName=$true)] 
+        [Parameter(Mandatory = $true,  
+            ValueFromPipeline = $true, 
+            ValueFromPipelineByPropertyName = $true)] 
         [string[]] 
         $DomainName, 
-        [Parameter(Mandatory=$false)] 
+        [Parameter(Mandatory = $false)] 
         [switch] 
         $IncludeProxy, 
-        [Parameter(Mandatory=$false)] 
-        [String] 
-        $OutCSV, 
-        [Parameter(Mandatory=$false)] 
-        [Switch] 
-        $OutGrid, 
-        [Parameter(Mandatory=$false)] 
+        [Parameter(Mandatory = $false)] 
         [Switch] 
         $MBXOnly 
     ) 
- 
-    Begin 
-    { 
-        $DomainCount = @() 
-        #Gather recipient information 
-        if($MBXOnly) 
-        { 
-            $ExRecipients = Get-Mailbox -Resultsize Unlimited | select emailaddresses,primarysmtpaddress 
-        } 
-        else 
-        { 
-            $ExRecipients = Get-Recipient -ResultSize Unlimited | select emailaddresses,primarysmtpaddress 
-        } 
- 
-    } 
-    Process 
-    {    
-        foreach($d in $DomainName) 
-        { 
-            $domobj = New-Object PSObject 
-            $domobj | Add-Member NoteProperty -Name Domain -Value $d 
-            $domobj | Add-Member NoteProperty -Name Count -Value "0" 
-            $DomainCount = $DomainCount += $domobj 
-        } 
-        # Loop through recipients and count total primay addresses in each domain 
- 
-    Foreach($r in $ExRecipients) 
-    { 
-        if($IncludeProxy) 
-        { 
-            Foreach($d in $DomainName) 
-            { 
-                if($r.EmailAddresses -match $d) 
-                { 
-                    $dadd = $DomainCount | ?{$_.Domain -eq $d} 
+
+    $DomainCount = @() 
+    #Gather recipient information 
+    if ($MBXOnly) { 
+        $ExRecipients = Get-Mailbox -Resultsize Unlimited | Select-Object emailaddresses, primarysmtpaddress 
+    } 
+    else { 
+        $ExRecipients = Get-Recipient -ResultSize Unlimited | Select-Object emailaddresses, primarysmtpaddress 
+    } 
+    foreach ($d in $DomainName) { 
+        $domobj = New-Object PSObject 
+        $domobj | Add-Member NoteProperty -Name Domain -Value $d 
+        $domobj | Add-Member NoteProperty -Name Count -Value "0" 
+        $DomainCount = $DomainCount += $domobj 
+    } 
+    # Loop through recipients and count total primay addresses in each domain 
+    Foreach ($r in $ExRecipients) { 
+        if ($IncludeProxy) { 
+            Foreach ($d in $DomainName) { 
+                if ($r.EmailAddresses -match $d) { 
+                    $dadd = $DomainCount | ? {$_.Domain -eq $d} 
                     $dadd.count = [int]$dadd.Count + 1 
                 } 
             } 
         } 
-        else 
-        { 
-            Foreach($d in $DomainName) 
-            { 
-                if($r.PrimarySmtpAddress.Domain -match $d) 
-                { 
-                    $dadd = $DomainCount | ?{$_.Domain -eq $d} 
+        else { 
+            Foreach ($d in $DomainName) { 
+                if ($r.PrimarySmtpAddress.Domain -match $d) { 
+                    $dadd = $DomainCount | ? {$_.Domain -eq $d} 
                     $dadd.count = [int]$dadd.Count + 1 
                 } 
  
             } 
         } 
     } 
- 
-    } 
-    End 
-    { 
-    if($OutGrid) 
-    { 
-        $DomainCount | Out-GridView 
-    } 
-    if($OutCSV) 
-    { 
-        $DomainCount | Export-CSV -NoTypeInformation -Path $OutCSV 
-    } 
-    else 
-    { 
-        return $DomainCount 
-    } 
-    } 
+
+    return $DomainCount 
 }
