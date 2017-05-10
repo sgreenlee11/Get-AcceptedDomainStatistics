@@ -48,8 +48,7 @@
  
 #> 
 function Get-AcceptedDomainStatistics { 
-    [CmdletBinding()] 
-    [OutputType([int])] 
+    [CmdletBinding()]
     Param 
     ( 
         [Parameter(Mandatory = $true,  
@@ -64,41 +63,45 @@ function Get-AcceptedDomainStatistics { 
         [Switch] 
         $MBXOnly 
     ) 
+    #Using Begin,Process,End to support pipeline. Structure is a bit weird since the pipeline input is just the Domain Name, but achieves desired results
+    Begin {
+        $DomainCount = New-Object System.Collections.ArrayList
 
-    $DomainCount = @() 
-    #Gather recipient information 
-    if ($MBXOnly) { 
-        $ExRecipients = Get-Mailbox -Resultsize Unlimited | Select-Object emailaddresses, primarysmtpaddress 
-    } 
-    else { 
-        $ExRecipients = Get-Recipient -ResultSize Unlimited | Select-Object emailaddresses, primarysmtpaddress 
-    } 
-    foreach ($d in $DomainName) { 
-        $domobj = New-Object PSObject 
-        $domobj | Add-Member NoteProperty -Name Domain -Value $d 
-        $domobj | Add-Member NoteProperty -Name Count -Value "0" 
-        $DomainCount = $DomainCount += $domobj 
-    } 
-    # Loop through recipients and count total primay addresses in each domain 
-    Foreach ($r in $ExRecipients) { 
-        if ($IncludeProxy) { 
-            Foreach ($d in $DomainName) { 
-                if ($r.EmailAddresses -match $d) { 
-                    $dadd = $DomainCount | ? {$_.Domain -eq $d} 
-                    $dadd.count = [int]$dadd.Count + 1 
-                } 
-            } 
-        } 
-        else { 
-            Foreach ($d in $DomainName) { 
-                if ($r.PrimarySmtpAddress.Domain -match $d) { 
-                    $dadd = $DomainCount | ? {$_.Domain -eq $d} 
-                    $dadd.count = [int]$dadd.Count + 1 
-                } 
+    }
+    Process {
+        #Gather recipient information 
+        foreach ($d in $DomainName) { 
+            $domobj = New-Object PSObject 
+            $domobj | Add-Member NoteProperty -Name Domain -Value $d 
+            $domobj | Add-Member NoteProperty -Name Count -Value 0
+            [void]$DomainCount.Add($domobj)
+        }
+    }
+    # Loop through recipients and count total primay addresses in each domain
+    End {
+        #Gather recipient information
+        if ($MBXOnly) { 
+            $ExRecipients = Get-Mailbox -Resultsize Unlimited | Select-Object emailaddresses, primarysmtpaddress 
+        } 
+        else { 
+            $ExRecipients = Get-Recipient -ResultSize Unlimited | Select-Object emailaddresses, primarysmtpaddress 
+        }   
+        Foreach ($r in $ExRecipients) { 
+            if ($IncludeProxy) { 
+                Foreach ($a in ($r.EmailAddresses | Where-Object {$_ -like "smtp*"})) { 
+                    $adddomain = $a -split "@"
+                    ($DomainCount | Where-Object {$_.Domain -eq $adddomain[1]}).Count ++
+                } 
+            }  
+            else { 
+                $adddomain = $r.PrimarySmtpAddress -Split "@"
+                if ($DomainCount.Domain -contains $adddomain[1]) {
+                    ($DomainCount | Where-Object {$_.Domain -eq $adddomain[1]}).Count ++
+                }
  
-            } 
-        } 
-    } 
+            } 
+        } 
 
-    return $DomainCount 
+        return $DomainCount
+    }
 }
